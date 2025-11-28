@@ -50,7 +50,7 @@ class Phi4(lmms):
         dtype: Optional[Union[str, torch.dtype]] = "auto",
         batch_size: int = 1,
         trust_remote_code: Optional[bool] = True,
-        attn_implementation: Optional[str] = None,
+        attn_implementation: Optional[str] = "eager",
         device_map: str = "",
         chat_template: Optional[str] = None,
         use_cache: bool = True,
@@ -62,7 +62,7 @@ class Phi4(lmms):
         assert kwargs == {}, f"Unexpected kwargs: {kwargs}"
 
         accelerator = Accelerator()
-        if accelerator.num_processes > 1 and device_map == "":
+        if accelerator.num_processes >= 1 and device_map == "":
             self._device = torch.device(f"cuda:{accelerator.local_process_index}")
             self.device_map = f"cuda:{accelerator.local_process_index}"
         else:
@@ -72,10 +72,27 @@ class Phi4(lmms):
             dtype = getattr(torch, dtype)
 
         self.max_frames_num = max_frames_num
-        self._model = AutoModelForCausalLM.from_pretrained(pretrained, revision=revision, torch_dtype=dtype, device_map=self.device_map, trust_remote_code=trust_remote_code, attn_implementation=attn_implementation)
+
+        # Load config first and override attn_implementation
+        config = AutoConfig.from_pretrained(
+            pretrained, revision=revision, trust_remote_code=trust_remote_code
+        )
+        config.attn_implementation = attn_implementation
+
+        self._model = AutoModelForCausalLM.from_pretrained(
+            pretrained,
+            revision=revision,
+            torch_dtype=dtype,
+            device_map=self.device_map,
+            trust_remote_code=trust_remote_code,
+            config=config,
+            attn_implementation=attn_implementation,
+        )
 
         self.pretrained = pretrained
-        self._processor = AutoProcessor.from_pretrained(pretrained, revision=revision, trust_remote_code=trust_remote_code)
+        self._processor = AutoProcessor.from_pretrained(
+            pretrained, revision=revision, trust_remote_code=trust_remote_code
+        )
         # Pad from left for batched generation: https://huggingface.co/docs/transformers/v4.39.3/en/model_doc/llava#usage-tips
         self._processor.tokenizer.padding_side = "left"
         self._tokenizer = self._processor.tokenizer
@@ -84,28 +101,46 @@ class Phi4(lmms):
         self.chat_template = chat_template
         self.use_cache = use_cache
         if accelerator.num_processes > 1 and device_map == "":
-            assert accelerator.distributed_type in [DistributedType.FSDP, DistributedType.MULTI_GPU, DistributedType.DEEPSPEED], "Unsupported distributed type provided. Only DDP and FSDP are supported."
+            assert accelerator.distributed_type in [
+                DistributedType.FSDP,
+                DistributedType.MULTI_GPU,
+                DistributedType.DEEPSPEED,
+            ], "Unsupported distributed type provided. Only DDP and FSDP are supported."
             # If you want to use DistributedType.DEEPSPEED, you have to run accelerate config before using the model
             # Also, you have to select zero stage 0 (equivalent to DDP) in order to make the prepare model works
             # I tried to set different parameters in the kwargs to let default zero 2 stage works, but it didn't work.
             if accelerator.distributed_type == DistributedType.DEEPSPEED:
                 kwargs = {
                     "train_micro_batch_size_per_gpu": self.batch_size_per_gpu,
-                    "train_batch_size": self.batch_size_per_gpu * accelerator.num_processes,
+                    "train_batch_size": self.batch_size_per_gpu
+                    * accelerator.num_processes,
                 }
-                AcceleratorState().deepspeed_plugin.deepspeed_config_process(must_match=True, **kwargs)
-                eval_logger.info("Detected that you are using DistributedType.DEEPSPEED. Make sure you run `accelerate config` and set zero stage to 0")
-            if accelerator.distributed_type == DistributedType.FSDP or accelerator.distributed_type == DistributedType.DEEPSPEED:
+                AcceleratorState().deepspeed_plugin.deepspeed_config_process(
+                    must_match=True, **kwargs
+                )
+                eval_logger.info(
+                    "Detected that you are using DistributedType.DEEPSPEED. Make sure you run `accelerate config` and set zero stage to 0"
+                )
+            if (
+                accelerator.distributed_type == DistributedType.FSDP
+                or accelerator.distributed_type == DistributedType.DEEPSPEED
+            ):
                 self._model = accelerator.prepare(self.model)
             else:
-                self._model = accelerator.prepare_model(self.model, evaluation_mode=True)
+                self._model = accelerator.prepare_model(
+                    self.model, evaluation_mode=True
+                )
             self.accelerator = accelerator
             if self.accelerator.is_local_main_process:
-                eval_logger.info(f"Using {accelerator.num_processes} devices with data parallelism")
+                eval_logger.info(
+                    f"Using {accelerator.num_processes} devices with data parallelism"
+                )
             self._rank = self.accelerator.local_process_index
             self._world_size = self.accelerator.num_processes
         elif accelerator.num_processes == 1 and device_map == "auto":
-            eval_logger.info(f"Using {accelerator.num_processes} devices with pipeline parallelism")
+            eval_logger.info(
+                f"Using {accelerator.num_processes} devices with pipeline parallelism"
+            )
             self._rank = 0
             self._world_size = 1
         else:
@@ -157,7 +192,9 @@ class Phi4(lmms):
     def world_size(self):
         return self._world_size
 
-    def tok_encode(self, string: str, left_truncate_len=None, add_special_tokens=None) -> List[int]:
+    def tok_encode(
+        self, string: str, left_truncate_len=None, add_special_tokens=None
+    ) -> List[int]:
         """ """
         add_special_tokens = False if add_special_tokens is None else add_special_tokens
         encoding = self.tokenizer.encode(string, add_special_tokens=add_special_tokens)
@@ -185,7 +222,9 @@ class Phi4(lmms):
         else:
             vr = VideoReader(video_path[0], ctx=cpu(0))
         total_frame_num = len(vr)
-        uniform_sampled_frames = np.linspace(0, total_frame_num - 1, max_frames_num, dtype=int)
+        uniform_sampled_frames = np.linspace(
+            0, total_frame_num - 1, max_frames_num, dtype=int
+        )
         frame_idx = uniform_sampled_frames.tolist()
         spare_frames = vr.get_batch(frame_idx).asnumpy()
         return spare_frames  # (frames, height, width, channels)
@@ -208,7 +247,11 @@ class Phi4(lmms):
                 text += f"<|image_{vision_start}|>"
                 vision_start += 1
             elif isinstance(visual, dict) and "array" in visual:
-                audio = downsample_audio(visual["array"], visual["sampling_rate"], self._processor.audio_processor.sampling_rate)
+                audio = downsample_audio(
+                    visual["array"],
+                    visual["sampling_rate"],
+                    self._processor.audio_processor.sampling_rate,
+                )
                 audio = [audio, self._processor.audio_processor.sampling_rate]
                 audios.append(audio)
                 text += f"<|audio_{audio_start}|>"
@@ -247,7 +290,9 @@ class Phi4(lmms):
             # Append at the front
             text += result[idx]
             if "audio" in file_type.mime:
-                audio = librosa.load(visual, sr=self._processor.audio_processor.sampling_rate)[0]
+                audio = librosa.load(
+                    visual, sr=self._processor.audio_processor.sampling_rate
+                )[0]
                 audio = [audio, self._processor.audio_processor.sampling_rate]
                 audios.append(audio)
                 text += f"<|audio_{audio_start}|>"
@@ -287,21 +332,31 @@ class Phi4(lmms):
         # we group requests by their generation_kwargs,
         # so that we don't try to execute e.g. greedy sampling and temp=0.8 sampling
         # in the same batch.
-        re_ords = utils.Collator([reg.args for reg in requests], _collate, grouping=True)
+        re_ords = utils.Collator(
+            [reg.args for reg in requests], _collate, grouping=True
+        )
         chunks = re_ords.get_batched(n=self.batch_size, batch_fn=None)
-        num_iters = len(requests) // self.batch_size if len(requests) % self.batch_size == 0 else len(requests) // self.batch_size + 1
+        num_iters = (
+            len(requests) // self.batch_size
+            if len(requests) % self.batch_size == 0
+            else len(requests) // self.batch_size + 1
+        )
         pbar = tqdm(total=num_iters, disable=(self.rank != 0), desc="Model Responding")
         for chunk in chunks:
             contexts, all_gen_kwargs, doc_to_visual, doc_id, task, split = zip(*chunk)
             task = task[0]
             split = split[0]
-            visuals = [doc_to_visual[0](self.task_dict[task][split][ids]) for ids in doc_id]
+            visuals = [
+                doc_to_visual[0](self.task_dict[task][split][ids]) for ids in doc_id
+            ]
             visuals = self.flatten(visuals)
             if task == "av_odyssey":
                 text, images, audios = self.process_av_odessy(visuals, contexts[0])
             else:
                 text, images, audios = self.default_process(visuals, contexts)
-            inputs = self._processor(text=text, images=images, audios=audios, return_tensors="pt").to(self.device)
+            inputs = self._processor(
+                text=text, images=images, audios=audios, return_tensors="pt"
+            ).to(self.device)
             # we assume all gen kwargs in the batch are the same
             # this is safe to assume because the `grouper` object ensures it.
             gen_kwargs = all_gen_kwargs[0]
@@ -314,31 +369,36 @@ class Phi4(lmms):
             if "temperature" not in gen_kwargs:
                 gen_kwargs["temperature"] = 0
             if "top_p" not in gen_kwargs:
-                gen_kwargs["top_p"] = None
+                gen_kwargs["top_p"] = 1.0
             if "num_beams" not in gen_kwargs:
                 gen_kwargs["num_beams"] = 1
             try:
+                # Use only greedy decoding - other parameters not supported
                 cont = self.model.generate(
                     **inputs,
-                    do_sample=True if gen_kwargs["temperature"] > 0 else False,
-                    temperature=gen_kwargs["temperature"],
-                    top_p=gen_kwargs["top_p"],
-                    num_beams=gen_kwargs["num_beams"],
                     max_new_tokens=gen_kwargs["max_new_tokens"],
-                    use_cache=self.use_cache,
+                    use_cache=False,
+                    top_p=gen_kwargs["top_p"],
                     pad_token_id=self.eot_token_id,
+                    num_beams=gen_kwargs["num_beams"],
                     num_logits_to_keep=0,
                 )
             except Exception as e:
                 eval_logger.error(f"Error generating text: {e}")
                 cont = inputs["input_ids"]
             cont = cont[:, inputs["input_ids"].shape[-1] :]
-            text_outputs = self._processor.batch_decode(cont, skip_special_tokens=True)[0]
+            text_outputs = self._processor.batch_decode(cont, skip_special_tokens=True)[
+                0
+            ]
             if self.accelerator.is_main_process and doc_id[0] % 100 == 0:
-                eval_logger.debug(f"Generated text for doc ID {doc_id[0]}:\n\n{text_outputs}\n")
+                eval_logger.debug(
+                    f"Generated text for doc ID {doc_id[0]}:\n\n{text_outputs}\n"
+                )
 
             res.append(text_outputs)
-            self.cache_hook.add_partial("generate_until", (contexts[0], gen_kwargs), text_outputs)
+            self.cache_hook.add_partial(
+                "generate_until", (contexts[0], gen_kwargs), text_outputs
+            )
             pbar.update(1)
         # reorder this group of results back to original unsorted form
         res = re_ords.get_original(res)

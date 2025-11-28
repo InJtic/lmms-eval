@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.9"
+requires-python = "==3.11.*"
 dependencies = [
     "accelerate>=0.29.1",
     "black>=24.1.0",
@@ -30,7 +30,6 @@ dependencies = [
     "jsonlines",
     "numexpr",
     "numpy==1.26.4",
-    "peft>=0.2.0",
     "pybind11>=2.6.2",
     "pytablewriter",
     "sacrebleu>=1.5.0",
@@ -50,7 +49,6 @@ dependencies = [
     "yt-dlp",
     "pycocoevalcap",
     "tqdm-multiprocess",
-    "transformers>=4.39.2",
     "transformers-stream-generator",
     "zstandard",
     "pillow",
@@ -75,6 +73,13 @@ dependencies = [
     "sentence_transformers",
     "python-dotenv",
     "qwen-vl-utils>=0.0.14",
+    "librosa>=0.11.0",
+    "backoff>=2.2.1",
+    "bitsandbytes>=0.48.2",
+    "ninja>=1.13.0",
+    "transformers>=4.49.0",
+    "peft>=0.17.0",
+    "google-genai>=1.2.0",
 ]
 
 [project.optional-dependencies]

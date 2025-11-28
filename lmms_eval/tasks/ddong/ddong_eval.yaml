@@ -1,7 +1,7 @@
 task: ddong_bench
 dataset_path: json
 dataset_kwargs:
-  data_files: /gpfs/home1/jtic0524/ddong/ddong_eval_data.jsonl
+  data_files: /gpfs/home1/jtic0524/ddong/lmms-eval/processed_ddong_eval_data.jsonl
 output_type: generate_until
 
 test_split: train
