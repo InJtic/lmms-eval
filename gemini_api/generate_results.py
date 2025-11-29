@@ -21,11 +21,11 @@ def calculate_metrics(results):
     return mean, stderr
 
 
-def generate_results(start: float, end: float):
+def generate_results(start: float, end: float, task: str):
     samples = []
-    if os.path.exists("../output/results/Gemini-2.5-flash/samples_ddong_bench.jsonl"):
+    if os.path.exists("output/results/Gemini-2.5-flash/samples_ddong_bench.jsonl"):
         with open(
-            "../output/results/Gemini-2.5-flash/samples_ddong_bench.jsonl", "r"
+            "output/results/Gemini-2.5-flash/samples_ddong_bench.jsonl", "r"
         ) as f:
             for line in f:
                 samples.append(json.loads(line))
@@ -36,26 +36,25 @@ def generate_results(start: float, end: float):
     date_str = now.strftime("%Y%m%d_%H%M%S")
     results_data = {
         "results": {
-            "ddong_bench": {
-                "alias": "ddong_bench",
+            task: {
+                "alias": task,
                 "exact_match,none": mean_score,
                 "exact_match_stderr,none": stderr_score,
             }
         },
-        "group_subtasks": {"ddong_bench": []},
+        "group_subtasks": {task: []},
         "configs": {
-            "ddong_bench": {
-                "task": "ddong_bench",
+            task: {
+                "task": task,
                 "dataset_path": "json",
-                "dataset_kwargs": {"data_files": "samples_ddong_bench.jsonl"},
+                "dataset_kwargs": {"data_files": f"./data/{task}/.jsonl"},
                 "test_split": "train",
                 "full_docs": False,
                 "process_results_use_image": False,
-                # 함수 포인터는 문자열로 처리 (원본 포맷 유지)
-                "doc_to_visual": "<function ddong_doc_to_visaul at 0xPLACEHOLDER>",
-                "doc_to_text": "<function ddong_doc_to_text at 0xPLACEHOLDER>",
-                "doc_to_target": "<function ddong_doc_to_target at 0xPLACEHOLDER>",
-                "process_results": "<function ddong_process_results at 0xPLACEHOLDER>",
+                "doc_to_visual": "<function ddong_doc_to_visaul at 0x7f4bf7c028e0>",
+                "doc_to_text": "<function ddong_doc_to_text at 0x7f4bf7c028e0>",
+                "doc_to_target": "<function ddong_doc_to_target at 0x7f4bf7c028e0>",
+                "process_results": "<function ddong_process_results at 0x7f4bf7c028e0>",
                 "description": "",
                 "target_delimiter": " ",
                 "fewshot_delimiter": "\n\n",
@@ -79,10 +78,10 @@ def generate_results(start: float, end: float):
                 "should_decontaminate": False,
             }
         },
-        "versions": {"ddong_bench": "Yaml"},
-        "n-shot": {"ddong_bench": 0},
-        "higher_is_better": {"ddong_bench": {"exact_match": True}},
-        "n-samples": {"ddong_bench": {"original": n_samples, "effective": n_samples}},
+        "versions": {task: "Yaml"},
+        "n-shot": {task: 0},
+        "higher_is_better": {task: {"exact_match": True}},
+        "n-samples": {task: {"original": n_samples, "effective": n_samples}},
         "config": {
             "model": "gemini-2.5-flash",
             "model_args": "pretrained=google/gemini-2.5-flash",
@@ -100,7 +99,7 @@ def generate_results(start: float, end: float):
         },
         "git_hash": "custom_run",
         "date": date_str,
-        "task_hashes": {"ddong_bench": "custom_hash_value"},
+        "task_hashes": {task: "custom_hash_value"},
         "model_source": "google-api",
         "model_name": "gemini-2.5-flash",
         "model_name_sanitized": "google__gemini-2_5-flash",
@@ -114,5 +113,5 @@ def generate_results(start: float, end: float):
         "total_evaluation_time_seconds": str(end - start),
     }
 
-    with open("../output/results/Gemini-2.5-flash/results.json", "w") as f:
+    with open("output/results/Gemini-2.5-flash/results.json", "w") as f:
         json.dump(results_data, f, indent=2, ensure_ascii=False)
