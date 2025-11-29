@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --nodes=1 
-#SBATCH --partition=gpu2
+#SBATCH --partition=gpu3
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:4
 #SBATCH --job-name=ddong_eval
-#SBATCH -w n052
+#SBATCH -w n065
 #SBATCH -o ./logs/jupyter.%N.%j.out  # STDOUT 
 #SBATCH -e ./logs/jupyter.%N.%j.err  # STDERR
 
@@ -16,12 +16,12 @@ module load cuda/11.8.0
 export PYTHONPATH=$PYTHONPATH:./lmms_eval
 source .env
 
-MODEL_TYPE="internvl2"
-MODEL_ARGS="pretrained=OpenGVLab/InternVL3_5-8B"
+# MODEL_TYPE="internvl2"
+# MODEL_ARGS="pretrained=OpenGVLab/InternVL3_5-8B"
 # MODEL_TYPE="qwen3_vl"
 # MODEL_ARGS="pretrained=Qwen/Qwen3-VL-8B-Instruct"
-# MODEL_TYPE="llava_vid"
-# MODEL_ARGS="pretrained=lmms-lab/LLaVA-Video-7B-Qwen2"
+MODEL_TYPE="llava_vid"
+MODEL_ARGS="pretrained=lmms-lab/LLaVA-Video-7B-Qwen2"
 # MODEL_TYPE="phi4_multimodal" 
 # MODEL_ARGS="pretrained=Lexius/Phi-4-multimodal-instruct"
 
