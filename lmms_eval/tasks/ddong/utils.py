@@ -13,16 +13,14 @@ def _extract_frame(args):
 
 def ddong_doc_to_visaul(doc):
     video_path = doc["video"]
-    frame_indices = list(range(20))
 
-    # CPU 코어 개수에 따라 자동으로 스레드 수 결정 (I/O 바운드, 많은 스레드 가능)
+    frame_indices = list(range(doc["frames"]))
     num_workers = min(os.cpu_count() or 4, 16)
 
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         args_list = [(video_path, i) for i in frame_indices]
         frames = list(executor.map(_extract_frame, args_list))
 
-    # None 값 필터링 (오류 발생한 프레임 제거)
     frames = [f for f in frames if f is not None]
     return frames
 
